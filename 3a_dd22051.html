@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!--DGAAP 3a uzdevums, Dace Anna Dille dd22051
+  3a)  Izstrādāt datorprogrammu, kas realizē taisnes nogriežņa izrindošanu ar robojumu 
+  novēršanu pie dažādām fona un nogriežņa krāsām. Demonstrēt rezultātus pie dažādiem 
+  nogriežņa lenķiem. 
+  ____
+  Izmantots Wu algoritms (Xiaolin Wu's line algorithm)
+  -->
+<head>
+  <meta charset="UTF-8" />
+  <title>3a</title>
+  <!-- vienkārša laukuma izveide un noformējums risinājuma vizualizācijai-->
+  <style>
+    body { background: #9e9e9e; display: flex; justify-content: center; align-items: center; height: 100vh; }
+  </style>
+</head>
+<body>
+    <button onclick="window.location.href='1c_dd22051.html'" style="position: absolute; top: 20px; left: 20px; z-index: 10;">Uz 1c uzdevumu</button>
+    <button onclick="window.location.href='2b_dd22051.html'" style="position: absolute; top: 50px; left: 20px; z-index: 10;">Uz 2b uzdevumu</button>
+    <button onclick="window.location.href='5a_dd22051.html'" style="position: absolute; top: 80px; left: 20px; z-index: 10; ">Uz 5a uzdevumu</button>
+    <button onclick="window.location.href='6a_dd22051.html'" style="position: absolute; top: 110px; left: 20px; z-index: 10;">Uz 6a uzdevumu</button>
+    <button onclick="window.location.href='9a_dd22051.html'" style="position: absolute; top: 140px; left: 20px; z-index: 10;">Uz 9a uzdevumu</button>
+    <button onclick="window.location.href='10a_dd22051.html'" style="position: absolute; top: 170px; left: 20px; z-index: 10;">Uz 10a uzdevumu</button>
+    <button onclick="window.location.href='11a_dd22051.html'" style="position: absolute; top: 200px; left: 20px; z-index: 10;">Uz 11a uzdevumu</button>
+  <canvas id="canvas" width="400" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const canvasBg = "#d0d0d0"; // kanvas fona krāsa - izmantota gan elementa stila definēšanai, 
+                                // gan pikseļu sajaukšanai nogriežņa zīmēšanā
+  
+    canvas.style.background = canvasBg; 
+    function hexToRgb(hex) {
+      let c = hex.replace('#', '');
+      if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+      const num = parseInt(c, 16);
+      return [
+        (num >> 16) & 255,
+        (num >> 8) & 255,
+        num & 255
+      ];
+    }
+    const [bgR, bgG, bgB] = hexToRgb(canvasBg);
+    const lineColor = "#ff0000"; // līnijas krāsa definēta kā mainīgais - tā kā gan fona, gan līnijas 
+                                 // krāsa ir mainīgie, krāsas maiņa ir viegli izdarāma un neietekmē 
+                                 // vizualizācijas loģiku
+    const [lineR, lineG, lineB] = hexToRgb(lineColor);
+
+    // matemātiskās palīgfunkcijas Wu algoritma pielietošanai 
+    function ipart(x) { return Math.floor(x); } // atgriež veselo daļu no x
+    function round(x) { return Math.round(x); } // noapaļo x uz tuvāko veselo skaitli
+    function fpart(x) { return x - Math.floor(x); } // atgriež x daļu pēc veselās daļas (pēc komata)
+    function rfpart(x) { return 1 - fpart(x); } // atgriež 1 - x daļu pēc veselās daļas (1 - daļskaitlis pēc komata)
+
+    // uzstāda atsevišķu pikseli ar alfa (intensitātes) sajaukšanu - jauc mainīgo līnijas krāsu ar fona krāsu
+    function plot(x, y, alpha) {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      const r = lineR;
+      const g = lineG;
+      const b = lineB;
+
+      const br = bgR, bg = bgG, bb = bgB;
+      const outR = Math.round((1 - alpha) * br + alpha * r);
+      const outG = Math.round((1 - alpha) * bg + alpha * g);
+      const outB = Math.round((1 - alpha) * bb + alpha * b);
+      const imageData = ctx.createImageData(1, 1);
+      const data = imageData.data;
+      data[0] = outR;
+      data[1] = outG;
+      data[2] = outB;
+      data[3] = 255;
+      ctx.putImageData(imageData, x, y);
+    }
+
+    // Wu taisnes ar robojumu novēršanu zīmēšanas algoritms
+    function drawWuLine(x0, y0, x1, y1) {
+      const steep = Math.abs(y1 - y0) > Math.abs(x1 - x0);
+
+      if (steep) {
+        [x0, y0] = [y0, x0];
+        [x1, y1] = [y1, x1];
+      }
+
+      if (x0 > x1) {
+        [x0, x1] = [x1, x0];
+        [y0, y1] = [y1, y0];
+      }
+
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const gradient = dx === 0 ? 1 : dy / dx;
+
+      // pirmais nogriežņa galapunkts
+      let xend = round(x0);
+      let yend = y0 + gradient * (xend - x0);
+      let xgap = rfpart(x0 + 0.5);
+      let xpxl1 = xend;
+      let ypxl1 = ipart(yend);
+
+      if (steep) {
+        plot(ypxl1, xpxl1, rfpart(yend) * xgap);
+        plot(ypxl1 + 1, xpxl1, fpart(yend) * xgap);
+      } else {
+        plot(xpxl1, ypxl1, rfpart(yend) * xgap);
+        plot(xpxl1, ypxl1 + 1, fpart(yend) * xgap);
+      }
+
+      let intery = yend + gradient;
+
+      // otrais nogriežņa galapunkts
+      xend = round(x1);
+      yend = y1 + gradient * (xend - x1);
+      xgap = fpart(x1 + 0.5);
+      let xpxl2 = xend;
+      let ypxl2 = ipart(yend);
+
+      if (steep) {
+        plot(ypxl2, xpxl2, rfpart(yend) * xgap);
+        plot(ypxl2 + 1, xpxl2, fpart(yend) * xgap);
+      } else {
+        plot(xpxl2, ypxl2, rfpart(yend) * xgap);
+        plot(xpxl2, ypxl2 + 1, fpart(yend) * xgap);
+      }
+
+      // galvenā cikla daļa
+      for (let x = xpxl1 + 1; x < xpxl2; x++) {
+        if (steep) {
+          plot(ipart(intery), x, rfpart(intery));
+          plot(ipart(intery) + 1, x, fpart(intery));
+        } else {
+          plot(x, ipart(intery), rfpart(intery));
+          plot(x, ipart(intery) + 1, fpart(intery));
+        }
+        intery += gradient;
+      }
+    }
+
+    // zīmē vairākas taisnes no kanvas centra dažādos leņķos
+    function drawDemo() {
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const innerRadius = 10; // līnijas sākuma punkta attālums no centra
+      const radius = 150; // līnijas galapunkta attālums no centra
+      const angles = [0, 30, 45, 60, 90, 95, 130, 143, 162];
+
+      for (let angle of angles) {
+        const rad = angle * Math.PI / 180;
+        const x0 = centerX + innerRadius * Math.cos(rad); 
+        const y0 = centerY + innerRadius * Math.sin(rad);
+        const x1 = centerX + radius * Math.cos(rad);
+        const y1 = centerY + radius * Math.sin(rad);
+        drawWuLine(x0, y0, x1, y1);
+      }
+    }
+
+    drawDemo();
+  </script>
+</body>
+</html>

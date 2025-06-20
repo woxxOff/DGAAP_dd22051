@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!-- DGAAP 5a uzdevums, Dace Anna Dille dd22051
+  5a) Izstrādāt datorprogrammu, kas realizē mēreni sarežģīta telpiska objekta (piemēram, 
+  dodekaedrs) karkasa modeļa galvenās ģeometriskās transformācijas matricu formā, 
+  ieskaitot projekcijas un pāreju no pasaules uz novērotāja koordinātu sistēmām.
+  _____
+  Šeit tiek izmantots daudzskaldņa karkasa modelis, kas tiek automātiski rotēts ap asi. Rotāciju var apturēt/atsākt ar pogu.
+  -->
+<head>
+  <meta charset="UTF-8" />
+  <title>5a</title>
+  <style>
+    body { background: #9e9e9e; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    canvas { background: #d0d0d0; margin-top: 40px; }
+  </style>
+</head>
+<body>
+<button onclick="window.location.href='1c_dd22051.html'" style="position: absolute; top: 20px; left: 20px; z-index: 10;">Uz 1c uzdevumu</button>
+<button onclick="window.location.href='2b_dd22051.html'" style="position: absolute; top: 50px; left: 20px; z-index: 10;">Uz 2b uzdevumu</button>
+<button onclick="window.location.href='3a_dd22051.html'" style="position: absolute; top: 80px; left: 20px; z-index: 10;">Uz 3a uzdevumu</button>
+<button onclick="window.location.href='6a_dd22051.html'" style="position: absolute; top: 110px; left: 20px; z-index: 10;">Uz 6a uzdevumu</button>
+<button onclick="window.location.href='9a_dd22051.html'" style="position: absolute; top: 140px; left: 20px; z-index: 10;">Uz 9a uzdevumu</button>
+<button onclick="window.location.href='10a_dd22051.html'" style="position: absolute; top: 170px; left: 20px; z-index: 10;">Uz 10a uzdevumu</button>
+<button onclick="window.location.href='11a_dd22051.html'" style="position: absolute; top: 200px; left: 20px; z-index: 10;">Uz 11a uzdevumu</button>
+  <button id="toggleBtn" style="left: 180px;">Apturēt rotāciju</button>
+  <h2>Daudzskaldņa karkasa modelis ar automātisku rotāciju</h2>
+  <canvas id="canvas" width="600" height="600"></canvas>
+  <script>
+    // daudzskaldņa virsotņu koordinātas (vienības garumā, centrēts)
+    const phi = (1 + Math.sqrt(5)) / 2;
+    const a = 1;
+    const b = 1 / phi;
+    const c = 2 - phi;
+
+    // zvaigznes formas tipa daudzskaldnis ar 8 virsotnēm, dažas izvirzītas uz āru, dažas uz iekšu, lai veidotu asimetrisku formu
+    const vertices = [
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+      [0.7, 0.7, 0.7],
+      [-0.7, -0.7, -1.2],
+    ];
+
+    const edges = [
+      [0,2],[0,4],[0,6],[0,7],
+      [1,3],[1,5],[1,6],[1,7],
+      [2,4],[2,5],[2,6],
+      [3,4],[3,5],[3,7],
+      [4,6],[4,7],
+      [5,6],[5,7],
+      [6,7]
+    ];
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    let angle = 0;
+    let running = true;
+
+    function matMul(a, b) {
+      // 3x3 * 3x1
+      return [
+        a[0][0]*b[0] + a[0][1]*b[1] + a[0][2]*b[2],
+        a[1][0]*b[0] + a[1][1]*b[1] + a[1][2]*b[2],
+        a[2][0]*b[0] + a[2][1]*b[1] + a[2][2]*b[2]
+      ];
+    }
+    function rotationMatrixY(theta) {
+      return [
+        [ Math.cos(theta), 0, Math.sin(theta)],
+        [ 0, 1, 0],
+        [-Math.sin(theta), 0, Math.cos(theta)]
+      ];
+    }
+    function rotationMatrixX(theta) {
+      return [
+        [1, 0, 0],
+        [0, Math.cos(theta), -Math.sin(theta)],
+        [0, Math.sin(theta), Math.cos(theta)]
+      ];
+    }
+    function rotationMatrixZ(theta) {
+      return [
+        [Math.cos(theta), -Math.sin(theta), 0],
+        [Math.sin(theta), Math.cos(theta), 0],
+        [0, 0, 1]
+      ];
+    }
+    // vienkārša perspektīvas projekcija
+    function project([x, y, z]) {
+      const fov = 2; // "kameras" attālums, lai kontrolētu perspektīvu (jeb vizualizācijas 
+                     // ziņā - objekta izmēru uz ekrāna)
+      const scale = 180;
+      return [
+        w/2 + scale * x / (z + fov),
+        h/2 - scale * y / (z + fov)
+      ];
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      // rotācija ap Y un X asīm
+      const rotY = rotationMatrixY(angle);
+      const rotX = rotationMatrixX(angle/2);
+      // virsotņu transformācija un projekcija
+      const transformed = vertices.map(v => matMul(rotY, matMul(rotX, v)));
+      const projected = transformed.map(project);
+      // šķautņu zīmēšana
+      ctx.strokeStyle = '#1565c0';
+      ctx.lineWidth = 2;
+      for (const [i, j] of edges) {
+        ctx.beginPath();
+        ctx.moveTo(projected[i][0], projected[i][1]);
+        ctx.lineTo(projected[j][0], projected[j][1]);
+        ctx.stroke();
+      }
+    }
+    function animate() {
+      if (running) {
+        angle += 0.015;
+        draw();
+      }
+      requestAnimationFrame(animate);
+    }
+    document.getElementById('toggleBtn').onclick = function() {
+      running = !running;
+      this.textContent = running ? 'Apturēt rotāciju' : 'Atsākt rotāciju';
+    };
+    draw();
+    animate();
+  </script>
+</body>
+</html>

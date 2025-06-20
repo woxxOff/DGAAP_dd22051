@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!--DGAAP 2b uzdevums, Dace Anna Dille dd22051
+  2b) Izstrādāt datorprogrammu, kas aprēķina pelēko toņu rastra attēla konvolūciju 
+  ar dotu masku -- gan tieši, gan, izmantojot Furjē transformāciju.
+  ____
+    Tiek izmantota 3x3 maska, kas izceļ malas (sharp mask).
+  -->
+<head>
+  <meta charset="UTF-8" />
+  <title>2b</title>
+  <style> 
+    body { background: #9e9e9e; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    canvas { margin: 10px; }
+    .row { display: flex; flex-direction: row; gap: 20px; }
+  </style>
+</head>
+<body>
+<button onclick="window.location.href='1c_dd22051.html'" style="position: absolute; top: 20px; left: 20px; z-index: 10;">Uz 1c uzdevumu</button>
+<button onclick="window.location.href='3a_dd22051.html'" style="position: absolute; top: 50px; left: 20px; z-index: 10;">Uz 3a uzdevumu</button>
+<button onclick="window.location.href='5a_dd22051.html'" style="position: absolute; top: 80px; left: 20px; z-index: 10;">Uz 5a uzdevumu</button>
+<button onclick="window.location.href='6a_dd22051.html'" style="position: absolute; top: 110px; left: 20px; z-index: 10;">Uz 6a uzdevumu</button>
+<button onclick="window.location.href='9a_dd22051.html'" style="position: absolute; top: 140px; left: 20px; z-index: 10;">Uz 9a uzdevumu</button>
+<button onclick="window.location.href='10a_dd22051.html'" style="position: absolute; top: 170px; left: 20px; z-index: 10;">Uz 10a uzdevumu</button>
+<button onclick="window.location.href='11a_dd22051.html'" style="position: absolute; top: 200px; left: 20px; z-index: 10;">Uz 11a uzdevumu</button>
+  <p>Attēlu ielāde var aizņemt dažas sekundes, jo tiek izmantota js veidota Furjē 
+        transformācijas implementācija bez optimizētas bibliotēkas</p>
+  <div class="row">
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <canvas id="srcCanvas" width="256" height="256"></canvas>
+      <span>Oriģināls (pelēktoņu)</span>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <canvas id="convCanvas" width="256" height="256"></canvas>
+      <span>Konvolūcija (tieši)</span>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <canvas id="fftConvCanvas" width="256" height="256"></canvas>
+      <span>Konvolūcija (Furjē)</span>
+    </div>
+  </div>
+  <script>
+    const srcCanvas = document.getElementById('srcCanvas');
+    const convCanvas = document.getElementById('convCanvas');
+    const fftConvCanvas = document.getElementById('fftConvCanvas');
+    const ctxSrc = srcCanvas.getContext('2d');
+    const ctxConv = convCanvas.getContext('2d');
+    const ctxFFTConv = fftConvCanvas.getContext('2d');
+    
+    const w = 256, h = 256;
+    srcCanvas.width = convCanvas.width = fftConvCanvas.width = w;
+    srcCanvas.height = convCanvas.height = fftConvCanvas.height = h;
+    const mask = [[0,-1,0],[-1,5,-1],[0,-1,0]];
+    const m = mask.length, n = mask[0].length;
+    const mw = Math.floor(m/2), nh = Math.floor(n/2);
+
+    const img = new Image();
+    img.src = 'varna1.jpg';
+    img.onload = () => {
+      process();
+    };
+
+    function toGray() {
+      ctxSrc.drawImage(img,0,0,w,h);
+      let d = ctxSrc.getImageData(0,0,w,h);
+      for(let i=0;i<d.data.length;i+=4){
+        let v = 0.299*d.data[i]+0.587*d.data[i+1]+0.114*d.data[i+2];
+        d.data[i]=d.data[i+1]=d.data[i+2]=v;
+      }
+      ctxSrc.putImageData(d,0,0);
+      return ctxSrc.getImageData(0,0,w,h);
+    }
+
+    function convolve(img) {
+      const out = ctxConv.createImageData(w,h);
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          let sum=0;
+          for(let j=0;j<m;j++){
+            for(let i=0;i<n;i++){
+              let xx = x+i-mw, yy = y+j-nh;
+              if(xx>=0 && xx<w && yy>=0 && yy<h){
+                sum += img.data[(yy*w+xx)*4]*mask[j][i];
+              }
+            }
+          }
+          let idx = (y*w+x)*4;
+          out.data[idx]=out.data[idx+1]=out.data[idx+2]=Math.min(Math.max(sum,0),255);
+          out.data[idx+3]=255;
+        }
+      }
+      return out;
+    }
+
+    // 1D DFT
+    function dft1d(arr, inverse=false) {
+      const N = arr.length;
+      let out = new Array(N).fill(0).map(_=>[0,0]);
+      const sign = inverse ? 1 : -1;
+      for(let k=0;k<N;k++){
+        let re=0, im=0;
+        for(let n=0;n<N;n++){
+          const phi = 2*Math.PI*k*n/N;
+          re += arr[n][0]*Math.cos(phi) - sign*arr[n][1]*Math.sin(phi);
+          im += arr[n][0]*sign*Math.sin(phi) + arr[n][1]*Math.cos(phi);
+        }
+        if(inverse) { re/=N; im/=N; }
+        out[k]=[re,im];
+      }
+      return out;
+    }
+
+    // 2D DFT
+    function dft2d(mat, inverse=false) {
+      const h = mat.length, w = mat[0].length;
+      let tmp = Array.from({length:h},()=>Array(w).fill([0,0]));
+      let out = Array.from({length:h},()=>Array(w).fill([0,0]));
+      // rindās
+      for(let y=0;y<h;y++){
+        tmp[y] = dft1d(mat[y], inverse);
+      }
+      // kolonnās
+      for(let x=0;x<w;x++){
+        let col = tmp.map(row=>row[x]);
+        let colDFT = dft1d(col, inverse);
+        for(let y=0;y<h;y++) out[y][x]=colDFT[y];
+      }
+      return out;
+    }
+
+    // maskas papildināšana līdz attēla izmēram, centrējot kodolu (fftshift)
+    function padMask(mask, w, h) {
+      let out = Array.from({length:h},()=>Array(w).fill([0,0]));
+      const mh = mask.length, mw = mask[0].length;
+      const cy = Math.floor(h/2) - Math.floor(mh/2);
+      const cx = Math.floor(w/2) - Math.floor(mw/2);
+      for(let y=0;y<mh;y++){
+        for(let x=0;x<mw;x++){
+          let yy = (cy + y) % h;
+          let xx = (cx + x) % w;
+          if(yy < 0) yy += h;
+          if(xx < 0) xx += w;
+          out[yy][xx]=[mask[y][x],0];
+        }
+      }
+      return out;
+    }
+
+    // punktveida reizināšana starp diviem 2D masīviem
+    function pointwiseMul(a, b) {
+      const h = a.length, w = a[0].length;
+      let out = Array.from({length:h},()=>Array(w).fill([0,0]));
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const [ar,ai]=a[y][x], [br,bi]=b[y][x];
+          out[y][x]=[ar*br-ai*bi, ar*bi+ai*br];
+        }
+      }
+      return out;
+    }
+
+    // attēla datu pārveidošana uz 2D masīvu (reāla, iedomāta daļa)
+    function imgDataTo2DArray(imgData) {
+      let arr = [];
+      for(let y=0;y<h;y++){
+        let row = [];
+        for(let x=0;x<w;x++){
+          let idx = (y*w+x)*4;
+          row.push([imgData.data[idx],0]);
+        }
+        arr.push(row);
+      }
+      return arr;
+    }
+
+    // 2D masīva pārveidošana atpakaļ uz attēla datiem
+    function array2DToImgData(arr) {
+      let out = ctxFFTConv.createImageData(w,h);
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          let idx = (y*w+x)*4;
+          let v = Math.round(Math.min(Math.max(arr[y][x][0],0),255));
+          out.data[idx]=out.data[idx+1]=out.data[idx+2]=v;
+          out.data[idx+3]=255;
+        }
+      }
+      return out;
+    }
+
+    // inversā maiņa (ifftshift) 2D masīvam
+    function ifftshift(arr) {
+      const h = arr.length, w = arr[0].length;
+      let out = Array.from({length:h},()=>Array(w));
+      const hy = Math.ceil(h/2), hx = Math.ceil(w/2);
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          let yy = (y + hy) % h;
+          let xx = (x + hx) % w;
+          out[y][x] = arr[yy][xx];
+        }
+      }
+      return out;
+    }
+
+    // konvolūcija ar Furjē transformāciju
+    function convolveFFT(imgData, mask) {
+      // 1. attēla un maskas pārveidošana uz 2D masīviem
+      let imgArr = imgDataTo2DArray(imgData);
+      let maskArr = padMask(mask, w, h);
+      // 2. FFT
+      let imgF = dft2d(imgArr, false);
+      let maskF = dft2d(maskArr, false);
+      // 3. punktveida reizināšana
+      let convF = pointwiseMul(imgF, maskF);
+      // 4. inversā FFT
+      let conv = dft2d(convF, true);
+      return conv;
+    }
+
+    function process() {
+      // pelēktoņu attēla iegūšana
+      let imgData = toGray();
+      ctxSrc.putImageData(imgData,0,0);
+      // tiešā konvolūcija
+      let conv = convolve(imgData);
+      ctxConv.putImageData(conv,0,0);
+      // konvolūcija Furjē domēnā ar ifftshift rezultātam
+      let fftConvArr = convolveFFT(imgData, mask);
+      fftConvArr = ifftshift(fftConvArr);
+      let fftConvImg = array2DToImgData(fftConvArr);
+      ctxFFTConv.putImageData(fftConvImg,0,0);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <!--DGAAP 9a uzdevums, Dace Anna Dille dd22051
+  9a) Izstrādāt datorprogrammu, kas realizē kontrasta palielināšanas transformāciju.
+  ____
+  Tiek izmantots attēls varna1.jpg.
+  -->
+<head>
+  <meta charset="UTF-8" />
+  <title>10a</title>
+  <style> 
+    body { background: #9e9e9e; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    canvas { margin: 10px; }
+  </style>
+</head>
+<body>
+<button onclick="window.location.href='1c_dd22051.html'" style="position: absolute; top: 20px; left: 20px; z-index: 10;">Uz 1c uzdevumu</button>
+<button onclick="window.location.href='2b_dd22051.html'" style="position: absolute; top: 50px; left: 20px; z-index: 10;">Uz 2b uzdevumu</button>
+<button onclick="window.location.href='3a_dd22051.html'" style="position: absolute; top: 80px; left: 20px; z-index: 10;">Uz 3a uzdevumu</button>
+<button onclick="window.location.href='5a_dd22051.html'" style="position: absolute; top: 110px; left: 20px; z-index: 10;">Uz 5a uzdevumu</button>
+<button onclick="window.location.href='6a_dd22051.html'" style="position: absolute; top: 140px; left: 20px; z-index: 10;">Uz 6a uzdevumu</button>
+<button onclick="window.location.href='9a_dd22051.html'" style="position: absolute; top: 170px; left: 20px; z-index: 10;">Uz 9a uzdevumu</button>
+<button onclick="window.location.href='11a_dd22051.html'" style="position: absolute; top: 200px; left: 20px; z-index: 10;">Uz 11a uzdevumu</button>
+
+  <p>Attēlu ielāde var aizņemt dažas sekundes, jo tiek izmantota js veidota izpludināšanas 
+    un asināšanas funkcionalitāte</p>
+
+  <div style="display: flex; gap: 20px;">
+    <canvas id="originalCanvas" style="width: 300px; height: auto;"></canvas>
+    <canvas id="filteredCanvas" style="width: 300px; height: auto;"></canvas>
+  </div>
+  <div>
+    <label for="filter">Attēla efekts:</label>
+    <select id="filter">
+      <option value="blur">Izpludināšana</option>
+      <option value="sharpen">Asināšana</option>
+    </select>
+    <label for="maskSize">Maskas izmērs:</label>
+    <input type="number" id="maskSize" value="3" min="3" max="33" step="10" />
+    <button onclick="applyFilter()">Pielietot</button>
+    <button onclick="resetCanvas()">Atiestatīt</button>
+  </div>
+
+  <script>
+    // oriģinālā attēla kanva un konteksts
+    const originalCanvas = document.getElementById('originalCanvas');
+    const originalCtx = originalCanvas.getContext('2d');
+
+    // filtrētā attēla kanva un konteksts
+    const filteredCanvas = document.getElementById('filteredCanvas');
+    const filteredCtx = filteredCanvas.getContext('2d');
+
+    // attēla ielāde un sākotnējā zīmēšana uz kanvām
+    const img = new Image();
+    img.onload = () => {
+      const scale = 0.5; // samazināšanas koeficients oriģinālajam attēlam, lai aprēķini būtu ātrāki
+      originalCanvas.width = img.width * scale;
+      originalCanvas.height = img.height * scale;
+      originalCtx.drawImage(img, 0, 0, originalCanvas.width, originalCanvas.height);
+
+      // filtrētā kanva tiek inicializēta ar oriģinālā attēla (samazinātajiem) izmēriem
+      filteredCanvas.width = originalCanvas.width;
+      filteredCanvas.height = originalCanvas.height;
+      filteredCtx.drawImage(originalCanvas, 0, 0);
+    };
+    img.src = 'varna1.jpg';
+
+    // funkcija kanvas atiestatīšanai uz oriģinālo attēlu
+    function resetCanvas() {
+      filteredCtx.drawImage(originalCanvas, 0, 0);
+    }
+
+    // izpludināšanas maskas izveide
+    function buildBlurMask(size) {
+      const value = 1 / (size * size);
+      return Array.from({ length: size }, () => Array(size).fill(value));
+    }
+
+    // asināšanas maskas izveide
+    function buildSharpenMask(size) {
+      const mask = Array.from({ length: size }, () => Array(size).fill(-1));
+      const center = Math.floor(size / 2);
+      mask[center][center] = size * size;
+      return mask;
+    }
+
+    // konvolūcijas algoritms pikseļu apstrādei
+    function applyFilter() {
+      const filterType = document.getElementById('filter').value;
+      const size = parseInt(document.getElementById('maskSize').value);
+
+      const imageData = filteredCtx.getImageData(0, 0, filteredCanvas.width, filteredCanvas.height);
+      const original = imageData.data;
+      const modified = new Uint8ClampedArray(original.length);
+
+      const kernel = (filterType === 'blur') ? buildBlurMask(size) : buildSharpenMask(size);
+      const half = Math.floor(size / 2);
+      const width = filteredCanvas.width;
+      const height = filteredCanvas.height;
+
+      function getPixelOffset(x, y, channel) {
+        return (y * width + x) * 4 + channel;
+      }
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          for (let c = 0; c < 4; c++) {
+            let acc = 0;
+            for (let ky = 0; ky < size; ky++) {
+              for (let kx = 0; kx < size; kx++) {
+                const dx = x + kx - half;
+                const dy = y + ky - half;
+                const clampedX = Math.min(width - 1, Math.max(0, dx));
+                const clampedY = Math.min(height - 1, Math.max(0, dy));
+                const value = original[getPixelOffset(clampedX, clampedY, c)];
+                acc += value * kernel[ky][kx];
+              }
+            }
+            modified[getPixelOffset(x, y, c)] = Math.min(255, Math.max(0, acc));
+          }
+        }
+      }
+
+      for (let i = 0; i < original.length; i++) {
+        original[i] = modified[i];
+      }
+
+      filteredCtx.putImageData(imageData, 0, 0);
+    }
+  </script>
+</body>
+</html>
